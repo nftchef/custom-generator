@@ -118,15 +118,28 @@ const layerConfigurations = [
     layersOrder: [
       { name: "Background" },
       { name: "Eyeball" },
-      { name: "Eye color", blend: MODE.colorBurn },
+      { name: "Eye color" },
       { name: "Iris" },
       { name: "Shine" },
-      { name: "Bottom lid", blend: MODE.overlay, opacity: 0.7 },
-      { name: "Top lid", opacity: 0.7 },
+      { name: "Bottom lid" },
+      { name: "Top lid" },
     ],
   },
 ];
 ```
+
+### Color randomization
+
+images that include `--FILL` in the file name will be colorized, randomly.
+To group colors that need to be the same, use colors groups by adding a name after fill, e.g.,
+`--FILL&skintone`
+
+### Blend modes
+
+Blend modes and layer styles should be added to the file name using a query string (following a `?`), e.g.,
+`filename%5?blend=multiply&opacity=10.png`
+
+This can be combined with `--FILL` layers
 
 Here is a list of the different blending modes that you can optionally use.
 
