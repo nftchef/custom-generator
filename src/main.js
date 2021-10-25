@@ -394,6 +394,15 @@ const isDnaUnique = (_DnaList = [], _dna = []) => {
  */
 function pickRandomElement(layer, dnaSequence, parentId, incompatibleDNA) {
   let totalWeight = 0;
+
+  if (incompatibleDNA.includes(layer.name) && layer.sublayer) {
+    console.log("expect Palm");
+    incompatibleDNA.push(
+      ...layer.elements.reduce((acc, element) => {
+        return [...acc, element.name];
+      }, [])
+    );
+  }
   const compatibleLayers = layer.elements.filter(
     (layer) => !incompatibleDNA.includes(layer.name)
   );
