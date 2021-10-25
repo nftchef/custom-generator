@@ -1,0 +1,40 @@
+{
+  "dna": "3e957f394dc05bd58a51238aa1d229a5328ed9bec5bb78685e894f85655560dc",
+  "name": "#1",
+  "description": "This is the description of your NFT project, remember to replace this",
+  "imageHash": "8538e0448039f0a7e5153ad0797fba75631f8230a2d6d95fe9bec0f145fb6ea3",
+  "image": "ipfs://NewUriToReplace/testing/1.png",
+  "edition": 1,
+  "date": 1634471865565,
+  "attributes": [
+    {
+      "trait_type": "Backgrounds",
+      "value": "Black"
+    },
+    {
+      "trait_type": "Hand Type",
+      "value": "Open"
+    },
+    {
+      "trait_type": "Fingers",
+      "value": "BONES"
+    },
+    {
+      "trait_type": "Palm",
+      "value": "GiantPupil"
+    },
+    {
+      "trait_type": "Pupils",
+      "value": "Normal"
+    },
+    {
+      "trait_type": "Wrist Accessory",
+      "value": "Watch"
+    },
+    {
+      "trait_type": "Tattoo",
+      "value": "159753"
+    }
+  ],
+  "compiler": "HashLips Art Engine"
+}

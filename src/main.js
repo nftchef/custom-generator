@@ -4,16 +4,16 @@ const path = require("path");
 const isLocal = typeof process.pkg === "undefined";
 const basePath = isLocal ? process.cwd() : path.dirname(process.execPath);
 const fs = require("fs");
-const sha1 = require(path.join(basePath, "/node_modules/sha1"));
+const keccak256 = require("keccak256");
 const { createCanvas, loadImage } = require(path.join(
   basePath,
   "/node_modules/canvas"
 ));
 
-const buildDir = path.join(basePath, "/build");
-const layersDir = path.join(basePath, "/layers");
 console.log(path.join(basePath, "/src/config.js"));
 const {
+  buildDir,
+  layersDir,
   format,
   baseUri,
   description,
@@ -26,6 +26,7 @@ const {
   debugLogs,
   incompatible,
   extraMetadata,
+  emptyLayerName,
   outputJPEG,
 } = require(path.join(basePath, "/src/config.js"));
 const canvas = createCanvas(format.width, format.height);
@@ -60,7 +61,8 @@ const cleanDna = (_str) => {
 };
 
 const cleanName = (_str) => {
-  const hasExtension = _str.endsWith(".png");
+  const extension = /\.[0-9a-zA-Z]+$/;
+  const hasExtension = extension.test(_str);
   let nameWithoutExtension = hasExtension ? _str.slice(0, -4) : _str;
   var nameWithoutWeight = nameWithoutExtension.split(rarityDelimiter).shift();
   return nameWithoutWeight;
@@ -84,7 +86,16 @@ const parseQueryString = (filename) => {
   };
 };
 
-const getElements = (path) => {
+/**
+ * Given some input, creates a sha256 hash.
+ * @param {Object} input
+ */
+const hash = (input) => {
+  const hashable = typeof input === Buffer ? input : JSON.stringify(input);
+  return keccak256(hashable).toString("hex");
+};
+
+const getElements = (path, layer) => {
   return fs
     .readdirSync(path)
     .filter((item) => {
@@ -92,7 +103,8 @@ const getElements = (path) => {
       return !/(^|\/)\.[^\/\.]/g.test(item);
     })
     .map((i, index) => {
-      const sublayer = !i.endsWith(".png");
+      const extension = /\.[0-9a-zA-Z]+$/;
+      const sublayer = !extension.test(i);
       const weight = getRarityWeight(i);
       const fill = /(-FILL)/.test(i); // bool if
       const colorGroup =
@@ -115,7 +127,7 @@ const getElements = (path) => {
       if (sublayer) {
         element.path = `${path}${i}`;
         const subPath = `${path}${i}/`;
-        element.elements = getElements(subPath);
+        element.elements = getElements(subPath, layer);
       }
 
       // Set trait type on layers for metadata
@@ -127,12 +139,17 @@ const getElements = (path) => {
       }
       if (weight === "required") {
         typeAncestor = element.sublayer ? 1 : 3;
-        // we need to check if the parent is required, or if it's a prop-folder
-        if (lineage[lineage.length - typeAncestor].includes(rarityDelimiter)) {
-          typeAncestor -= 1;
-        }
       }
-      element.trait = lineage[lineage.length - typeAncestor];
+      // we need to check if the parent is required, or if it's a prop-folder
+      if (lineage[lineage.length - typeAncestor].includes(rarityDelimiter)) {
+        typeAncestor += 1;
+      }
+
+      element.trait =
+        layer.trait !== undefined
+          ? layer.trait
+          : lineage[lineage.length - typeAncestor];
+
       element.traitValue = getTraitValueFromPath(element, lineage);
 
       return element;
@@ -158,7 +175,7 @@ const layersSetup = (layersOrder) => {
     return {
       id: index,
       name: layerObj.name,
-      elements: getElements(`${layersDir}/${layerObj.name}/`, blendMode), // array of all images in
+      elements: getElements(`${layersDir}/${layerObj.name}/`, layerObj), // array of all images in
       opacity: layerObj["opacity"] != undefined ? layerObj["opacity"] : 1,
     };
   });
@@ -166,7 +183,6 @@ const layersSetup = (layersOrder) => {
 };
 
 const saveImage = (_editionCount) => {
-  // if jpeg, use jpeg
   fs.writeFileSync(
     `${buildDir}/images/${_editionCount}${outputJPEG ? ".jpg" : ".png"}`,
     canvas.toBuffer(`${outputJPEG ? "image/jpeg" : "image/png"}`)
@@ -184,18 +200,29 @@ const drawBackground = () => {
   ctxMain.fillRect(0, 0, format.width, format.height);
 };
 
-const addMetadata = (_dna, _edition) => {
+const addMetadata = (_dna, _edition, _prefixData) => {
   let dateTime = Date.now();
+  const { _prefix, _offset, _imageHash } = _prefixData;
+
+  const combinedAttrs = [...attributesList, ...extraMetadata()];
+  const cleanedAttrs = combinedAttrs.reduce((acc, current) => {
+    const x = acc.find((item) => item.trait_type === current.trait_type);
+    if (!x) {
+      return acc.concat([current]);
+    } else {
+      return acc;
+    }
+  }, []);
+
   let tempMetadata = {
-    dna: sha1(_dna.join("")),
-    name: `#${_edition}`,
+    dna: hash(_dna),
+    name: `${_prefix ? _prefix + " " : ""}#${_edition - _offset}`,
     description: description,
-    image: `${baseUri}/${_edition}.png`,
+    imageHash: _imageHash,
+    image: `${baseUri}/${_edition}${outputJPEG ? ".jpg" : ".png"}`,
     edition: _edition,
     date: dateTime,
-    ...extraMetadata,
-    attributes: attributesList,
-    compiler: "HashLips Art Engine",
+    attributes: cleanedAttrs,
   };
   metadataList.push(tempMetadata);
   attributesList = [];
@@ -203,13 +230,17 @@ const addMetadata = (_dna, _edition) => {
 
 const addAttributes = (_element) => {
   let selectedElement = _element.layer;
-  const attribute = {
+  const layerAttributes = {
     trait_type: _element.layer.trait,
     value: selectedElement.traitValue,
   };
-  if (attributesList.some((attr) => attr.trait_type === attribute.trait_type))
+  if (
+    attributesList.some(
+      (attr) => attr.trait_type === layerAttributes.trait_type
+    )
+  )
     return;
-  attributesList.push(attribute);
+  attributesList.push(layerAttributes);
 };
 
 const loadLayerImg = async (_layer) => {
@@ -420,6 +451,11 @@ function pickRandomElement(layer, dnaSequence, parentId, incompatibleDNA) {
           )
         );
       }
+      // none/empty layer handler
+      if (currentLayers[i].name === emptyLayerName) {
+        return dnaSequence;
+      }
+
       let dnaString = `${parentId}.${currentLayers[i].id}:${currentLayers[i].filename}`;
       return dnaSequence.push(dnaString);
     }
@@ -546,12 +582,46 @@ const startCreating = async () => {
           debugLogs
             ? console.log("Editions left to create: ", abstractedIndexes)
             : null;
+
+          // Save the canvas buffer to file
           saveImage(abstractedIndexes[0]);
-          addMetadata(newDna, abstractedIndexes[0]);
+
+          // Metadata options
+          const savedFile = fs.readFileSync(
+            `${buildDir}/images/${abstractedIndexes[0]}${
+              outputJPEG ? ".jpg" : ".png"
+            }`
+          );
+          const _imageHash = hash(savedFile);
+
+          // if there's a prefix for the current configIndex, then
+          // start count back at 1 for the name, only.
+          const _prefix = layerConfigurations[layerConfigIndex].namePrefix
+            ? layerConfigurations[layerConfigIndex].namePrefix
+            : null;
+          // if resetNameIndex is turned on, calculate the offset and send it
+          // with the prefix
+          let _offset = 0;
+          if (layerConfigurations[layerConfigIndex].resetNameIndex) {
+            _offset = layerConfigurations.reduce((acc, layer, index) => {
+              if (index < layerConfigIndex) {
+                acc += layer.growEditionSizeTo;
+                return acc;
+              }
+              return acc;
+            }, 0);
+          }
+
+          addMetadata(newDna, abstractedIndexes[0], {
+            _prefix,
+            _offset,
+            _imageHash,
+          });
+
           saveMetaDataSingleFile(abstractedIndexes[0]);
           console.log(
-            `Created edition: ${abstractedIndexes[0]}, with DNA: ${sha1(
-              newDna.join("")
+            `Created edition: ${abstractedIndexes[0]}, with DNA: ${hash(
+              newDna
             )}`
           );
         });
@@ -574,4 +644,10 @@ const startCreating = async () => {
   writeMetaData(JSON.stringify(metadataList, null, 2));
 };
 
-module.exports = { startCreating, buildSetup, getElements, parseQueryString };
+module.exports = {
+  startCreating,
+  buildSetup,
+  getElements,
+  parseQueryString,
+  hash,
+};

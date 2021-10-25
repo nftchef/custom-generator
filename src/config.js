@@ -4,19 +4,24 @@ const path = require("path");
 const isLocal = typeof process.pkg === "undefined";
 const basePath = isLocal ? process.cwd() : path.dirname(process.execPath);
 const { MODE } = require(path.join(basePath, "src/blendMode.js"));
+const buildDir = path.join(basePath, "/build");
+const layersDir = path.join(basePath, "/layers");
+
 const description =
   "This is the description of your NFT project, remember to replace this";
 const baseUri = "ipfs://NewUriToReplace/testing";
 const outputJPEG = false;
+// if you use an empty/transparent file, set the name here.
+const emptyLayerName = "NONE";
 
 const layerConfigurations = [
   {
-    growEditionSizeTo: 10,
+    growEditionSizeTo: 33,
     layersOrder: [
-      { name: "Backgrounds" },
+      // { name: "Backgrounds" },
       // { name: "Eyeball" },
       { name: "Hand Type" },
-      { name: "Wrist" },
+      { name: "Wrist", trait: "Wrist Accessory" },
       { name: "Tattoo" },
       // { name: "Onion" },
       // { name: "Roots" },
@@ -38,8 +43,8 @@ const shuffleLayerConfigurations = false;
 const debugLogs = false;
 
 const format = {
-  width: 510,
-  height: 510,
+  width: 224,
+  height: 224,
 };
 
 const clamp = {
@@ -51,7 +56,7 @@ const background = {
   brightness: "60%",
 };
 
-const extraMetadata = {};
+const extraMetadata = () => [];
 
 const rarityDelimiter = "%";
 
@@ -65,6 +70,8 @@ const preview = {
 };
 
 module.exports = {
+  buildDir,
+  layersDir,
   format,
   baseUri,
   clamp,
@@ -78,5 +85,6 @@ module.exports = {
   debugLogs,
   extraMetadata,
   incompatible,
+  emptyLayerName,
   outputJPEG,
 };
