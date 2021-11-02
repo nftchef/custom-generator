@@ -16,7 +16,7 @@ const emptyLayerName = "NONE";
 
 const layerConfigurations = [
   {
-    growEditionSizeTo: 33,
+    growEditionSizeTo: 11,
     layersOrder: [
       // { name: "Backgrounds" },
       // { name: "Eyeball" },
@@ -33,7 +33,7 @@ const layerConfigurations = [
 
 // Incompatible items can be added to this object by a files cleanName
 const incompatible = {
-  // BONES: ["789s56"],
+  BONES: ["Palm"],
   // directory incompatible with directory example
   // GiantPupil: ["Watch", "159753", "222222"],
 };
