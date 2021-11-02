@@ -45,10 +45,9 @@ const buildSetup = () => {
 };
 
 const getRarityWeight = (_path) => {
-  // check if there is an extension, if not, consider it a directory
-  const exp = /\%(\d*)/;
-  const weight = exp.exec(_path);
-  const weightNumber = weight ? Number(weight[1]) : null;
+  const weight = _path.split(rarityDelimiter).pop();
+  const weightNumber = weight ? Number(weight) : null;
+
   if (!weightNumber || isNaN(weightNumber)) {
     return "required";
   }
@@ -397,11 +396,12 @@ function pickRandomElement(layer, dnaSequence, parentId, incompatibleDNA) {
 
   if (incompatibleDNA.includes(layer.name) && layer.sublayer) {
     console.log("expect Palm");
-    incompatibleDNA.push(
-      ...layer.elements.reduce((acc, element) => {
-        return [...acc, element.name];
-      }, [])
-    );
+    // incompatibleDNA.push(
+    //   ...layer.elements.reduce((acc, element) => {
+    //     return [...acc, element.name];
+    //   }, [])
+    // );
+    return dnaSequence;
   }
   const compatibleLayers = layer.elements.filter(
     (layer) => !incompatibleDNA.includes(layer.name)
