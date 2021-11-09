@@ -18,6 +18,19 @@
         "<node_internals>/**"
       ],
       "program": "${workspaceFolder}/utils/rarityData.js"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Regenerate",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "runtimeArgs": [
+        "4",
+        "-d"
+      ],
+      "program": "${workspaceFolder}/utils/regenerate.js"
     }
   ]
 }

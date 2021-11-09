@@ -5,7 +5,7 @@ const isLocal = typeof process.pkg === "undefined";
 const basePath = isLocal ? process.cwd() : path.dirname(process.execPath);
 const { MODE } = require(path.join(basePath, "src/blendMode.js"));
 const buildDir = path.join(basePath, "/build");
-const layersDir = path.join(basePath, "/layers");
+const layersDir = path.join(basePath, "..", "/StrangeHandParts");
 
 const description =
   "This is the description of your NFT project, remember to replace this";
@@ -16,13 +16,13 @@ const emptyLayerName = "NONE";
 
 const layerConfigurations = [
   {
-    growEditionSizeTo: 11,
+    growEditionSizeTo: 4,
     layersOrder: [
-      // { name: "Backgrounds" },
+      { name: "Backgrounds" },
       // { name: "Eyeball" },
       { name: "Hand Type" },
-      { name: "Wrist", trait: "Wrist Accessory" },
-      { name: "Tattoo" },
+      // { name: "Wrist", trait: "Wrist Accessory" },
+      // { name: "Wrist Numbers" },
       // { name: "Onion" },
       // { name: "Roots" },
       // { name: "Fastener" },
@@ -40,11 +40,11 @@ const incompatible = {
 
 const shuffleLayerConfigurations = false;
 
-const debugLogs = false;
+const debugLogs = true;
 
 const format = {
-  width: 224,
-  height: 224,
+  width: 900,
+  height: 900,
 };
 
 const clamp = {

@@ -98,7 +98,6 @@ const getElements = (path, layer) => {
   return fs
     .readdirSync(path)
     .filter((item) => {
-      console.log("Filtering items agains a regex", item);
       return !/(^|\/)\.[^\/\.]/g.test(item);
     })
     .map((i, index) => {
@@ -225,6 +224,9 @@ const addMetadata = (_dna, _edition, _prefixData) => {
   };
   metadataList.push(tempMetadata);
   attributesList = [];
+  // main.js currently does not use this return value,
+  // it is used by regenerate script and can be used anywhere else
+  return tempMetadata;
 };
 
 const addAttributes = (_element) => {
@@ -255,7 +257,7 @@ const loadLayerImg = async (_layer) => {
  * canvas to be rendered on the main canvas.
  * @param {Object} _renderObject Object containing loaded image and layer data
  */
-const drawElement = (_renderObject) => {
+const drawElement = (_renderObject, mainCanvas) => {
   const layerCanvas = createCanvas(format.width, format.height);
   const layerctx = layerCanvas.getContext("2d");
 
@@ -275,7 +277,7 @@ const drawElement = (_renderObject) => {
     );
   }
   addAttributes(_renderObject);
-  ctxMain.drawImage(layerCanvas, 0, 0, format.width, format.height);
+  mainCanvas.drawImage(layerCanvas, 0, 0, format.width, format.height);
   // fs.writeFileSync(
   //   `${buildDir}/images/${_renderObject.layer.colorGroup}-${
   //     100 * Math.random()
@@ -343,7 +345,9 @@ const HSLAdjustment = (ctx, img, colorGroup) => {
 const constructLayerToDna = (_dna = [], _layers = []) => {
   let mappedDnaToLayers = _layers.map((layer, index) => {
     let selectedElements = [];
-    const layerImages = _dna.filter((element) => element.startsWith(layer.id));
+    const layerImages = _dna.filter(
+      (element) => element.split(".")[0] == layer.id
+    );
     layerImages.forEach((img) => {
       const indexAddress = cleanDna(img);
 
@@ -501,6 +505,10 @@ const writeMetaData = (_data) => {
   fs.writeFileSync(`${buildDir}/json/_metadata.json`, _data);
 };
 
+const writeDnaLog = (_data) => {
+  fs.writeFileSync(`${buildDir}/_dna.json`, _data);
+};
+
 const saveMetaDataSingleFile = (_editionCount) => {
   let metadata = metadataList.find((meta) => meta.edition == _editionCount);
   debugLogs
@@ -527,6 +535,95 @@ function shuffle(array) {
   }
   return array;
 }
+
+/**
+ * Paints the given renderOjects to the main canvas context.
+ *
+ * @param {Array} renderObjectArray Array of render elements to draw to canvas
+ * @param {Object} layerData data passed from the current iteration of the loop or configured dna-set
+ *
+ */
+const paintLayers = (canvasContext, renderObjectArray, layerData) => {
+  debugLogs ? console.log("Clearing canvas") : null;
+  canvasContext.clearRect(0, 0, format.width, format.height);
+
+  const { abstractedIndexes } = layerData;
+
+  renderObjectArray.forEach((renderObject) => {
+    // one main canvas
+    // each render Object should be a solo canvas
+    // append them all to main canbas
+    canvasContext.globalAlpha = renderObject.layer.opacity;
+    canvasContext.globalCompositeOperation = renderObject.layer.blendmode;
+    canvasContext.drawImage(
+      drawElement(renderObject, canvasContext),
+      0,
+      0,
+      format.weight,
+      format.height
+    );
+  });
+  if (background.generate) {
+    canvasContext.globalCompositeOperation = "destination-over";
+    drawBackground();
+  }
+  globalColorGroups = {};
+  debugLogs
+    ? console.log("Editions left to create: ", abstractedIndexes)
+    : null;
+};
+
+const postProcessMetadata = (layerData) => {
+  const { abstractedIndexes, layerConfigIndex } = layerData;
+  // Metadata options
+  const savedFile = fs.readFileSync(
+    `${buildDir}/images/${abstractedIndexes[0]}${outputJPEG ? ".jpg" : ".png"}`
+  );
+  const _imageHash = hash(savedFile);
+
+  // if there's a prefix for the current configIndex, then
+  // start count back at 1 for the name, only.
+  const _prefix = layerConfigurations[layerConfigIndex].namePrefix
+    ? layerConfigurations[layerConfigIndex].namePrefix
+    : null;
+  // if resetNameIndex is turned on, calculate the offset and send it
+  // with the prefix
+  let _offset = 0;
+  if (layerConfigurations[layerConfigIndex].resetNameIndex) {
+    _offset = layerConfigurations.reduce((acc, layer, index) => {
+      if (index < layerConfigIndex) {
+        acc += layer.growEditionSizeTo;
+        return acc;
+      }
+      return acc;
+    }, 0);
+  }
+
+  return {
+    _imageHash,
+    _prefix,
+    _offset,
+  };
+};
+
+const outputFiles = (abstractedIndexes, layerData) => {
+  const { newDna, layerConfigIndex } = layerData;
+  // Save the canvas buffer to file
+  saveImage(abstractedIndexes[0]);
+
+  const { _imageHash, _prefix, _offset } = postProcessMetadata(layerData);
+
+  addMetadata(newDna, abstractedIndexes[0], {
+    _prefix,
+    _offset,
+    _imageHash,
+  });
+
+  saveMetaDataSingleFile(abstractedIndexes[0]);
+  console.log(
+    `Created edition: ${abstractedIndexes[0]}, with DNA: ${hash(newDna)}`
+  );
+};
 
 const startCreating = async () => {
   let layerConfigIndex = 0;
@@ -567,72 +664,15 @@ const startCreating = async () => {
         });
 
         await Promise.all(loadedElements).then((renderObjectArray) => {
-          debugLogs ? console.log("Clearing canvas") : null;
-          ctxMain.clearRect(0, 0, format.width, format.height);
-          if (background.generate) {
-            drawBackground();
-          }
-          renderObjectArray.forEach((renderObject) => {
-            // one main canvas
-            // each render Object should be a solo canvas
-            // append them all to main canbas
-            ctxMain.globalAlpha = renderObject.layer.opacity;
-            ctxMain.globalCompositeOperation = renderObject.layer.blendmode;
-            ctxMain.drawImage(
-              drawElement(renderObject),
-              0,
-              0,
-              format.weight,
-              format.height
-            );
-          });
-          globalColorGroups = {};
-          debugLogs
-            ? console.log("Editions left to create: ", abstractedIndexes)
-            : null;
-
-          // Save the canvas buffer to file
-          saveImage(abstractedIndexes[0]);
-
-          // Metadata options
-          const savedFile = fs.readFileSync(
-            `${buildDir}/images/${abstractedIndexes[0]}${
-              outputJPEG ? ".jpg" : ".png"
-            }`
-          );
-          const _imageHash = hash(savedFile);
-
-          // if there's a prefix for the current configIndex, then
-          // start count back at 1 for the name, only.
-          const _prefix = layerConfigurations[layerConfigIndex].namePrefix
-            ? layerConfigurations[layerConfigIndex].namePrefix
-            : null;
-          // if resetNameIndex is turned on, calculate the offset and send it
-          // with the prefix
-          let _offset = 0;
-          if (layerConfigurations[layerConfigIndex].resetNameIndex) {
-            _offset = layerConfigurations.reduce((acc, layer, index) => {
-              if (index < layerConfigIndex) {
-                acc += layer.growEditionSizeTo;
-                return acc;
-              }
-              return acc;
-            }, 0);
-          }
-
-          addMetadata(newDna, abstractedIndexes[0], {
-            _prefix,
-            _offset,
-            _imageHash,
-          });
-
-          saveMetaDataSingleFile(abstractedIndexes[0]);
-          console.log(
-            `Created edition: ${abstractedIndexes[0]}, with DNA: ${hash(
-              newDna
-            )}`
-          );
+          const layerData = {
+            newDna,
+            layerConfigIndex,
+            abstractedIndexes,
+          };
+          paintLayers(ctxMain, renderObjectArray, layerData);
+          outputFiles(abstractedIndexes, layerData);
         });
+
         dnaList.push(newDna);
         editionCount++;
         abstractedIndexes.shift();
@@ -650,10 +690,20 @@ const startCreating = async () => {
     layerConfigIndex++;
   }
   writeMetaData(JSON.stringify(metadataList, null, 2));
+  writeDnaLog(JSON.stringify(dnaList, null, 2));
 };
 
 module.exports = {
   startCreating,
+  createDna,
+  constructLayerToDna,
+  isDnaUnique,
+  loadLayerImg,
+  layersSetup,
+  paintLayers,
+  postProcessMetadata,
+  addAttributes,
+  addMetadata,
   buildSetup,
   getElements,
   parseQueryString,
