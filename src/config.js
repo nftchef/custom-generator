@@ -16,9 +16,9 @@ const emptyLayerName = "NONE";
 
 const layerConfigurations = [
   {
-    growEditionSizeTo: 4,
+    growEditionSizeTo: 11,
     layersOrder: [
-      { name: "Backgrounds" },
+      { name: "Backgrounds", options: { bypassDNA: true } },
       // { name: "Eyeball" },
       { name: "Hand Type" },
       // { name: "Wrist", trait: "Wrist Accessory" },
@@ -33,9 +33,22 @@ const layerConfigurations = [
 
 // Incompatible items can be added to this object by a files cleanName
 const incompatible = {
-  BONES: ["Palm"],
+  // BONES: ["Palm"],
   // directory incompatible with directory example
   // GiantPupil: ["Watch", "159753", "222222"],
+};
+
+/**
+ * Require combinations of files when constructing DNA, this bypasses the
+ * randomization and weights.
+ *
+ * The layer order matters here, the key (left side) is an item within
+ * the layer that comes first in the stack.
+ * the items in the array are "required" items that should be pulled from folders
+ * further in the stack
+ */
+const forcedCombinations = {
+  // floral: ["MetallicShades", "Golden Sakura"],
 };
 
 const shuffleLayerConfigurations = false;
@@ -85,6 +98,7 @@ module.exports = {
   debugLogs,
   extraMetadata,
   incompatible,
+  forcedCombinations,
   emptyLayerName,
   outputJPEG,
 };

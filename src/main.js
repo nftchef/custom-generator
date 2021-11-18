@@ -25,6 +25,7 @@ const {
   shuffleLayerConfigurations,
   debugLogs,
   incompatible,
+  forcedCombinations,
   extraMetadata,
   emptyLayerName,
   outputJPEG,
@@ -45,7 +46,7 @@ const buildSetup = () => {
 };
 
 const getRarityWeight = (_path) => {
-  const weight = _path.split(rarityDelimiter).pop();
+  const weight = _path.split(rarityDelimiter).pop().split(".")[0];
   const weightNumber = weight ? Number(weight) : null;
 
   if (!weightNumber || isNaN(weightNumber)) {
@@ -175,6 +176,10 @@ const layersSetup = (layersOrder) => {
       name: layerObj.name,
       elements: getElements(`${layersDir}/${layerObj.name}/`, layerObj), // array of all images in
       opacity: layerObj["opacity"] != undefined ? layerObj["opacity"] : 1,
+      bypassDNA:
+        layerObj.options?.["bypassDNA"] !== undefined
+          ? layerObj.options?.["bypassDNA"]
+          : false,
     };
   });
   return layers;
@@ -379,6 +384,45 @@ const constructLayerToDna = (_dna = [], _layers = []) => {
   return mappedDnaToLayers;
 };
 
+/**
+ * In some cases a DNA string may contain optional query parameters for options
+ * such as bypassing the DNA isUnique check, this function filters out those
+ * items without modifying the stored DNA.
+ *
+ * @param {String} _dna New DNA string
+ * @returns new DNA string with any items that should be filtered, removed.
+ */
+const filterDNAOptions = (_dna) => {
+  const filteredDNA = _dna.filter((element) => {
+    const query = /(\?.*$)/;
+    const querystring = query.exec(element);
+    if (!querystring) {
+      return true;
+    }
+    const options = querystring[1].split("&").reduce((r, setting) => {
+      const keyPairs = setting.split("=");
+      return { ...r, [keyPairs[0]]: keyPairs[1] };
+    }, []);
+
+    return options.bypassDNA;
+  });
+
+  return filteredDNA;
+};
+
+/**
+ * Cleaning function for DNA strings. When DNA strings include an option, it
+ * is added to the filename with a ?setting=value query string. It needs to be
+ * removed to properly access the file name before Drawing.
+ *
+ * @param {String} _dna The entire newDNA string
+ * @returns Cleaned DNA string without querystring parameters.
+ */
+const removeQueryStrings = (_dna) => {
+  const query = /(\?.*$)/;
+  return _dna.replace(query, "");
+};
+
 const isDnaUnique = (_DnaList = [], _dna = []) => {
   let foundDna = _DnaList.find((i) => i.join("") === _dna.join(""));
   return foundDna == undefined ? true : false;
@@ -392,31 +436,58 @@ const isDnaUnique = (_DnaList = [], _dna = []) => {
  * @param {Array} dnaSequence Strings of layer to object mappings to nesting structure
  * @param {Number*} parentId nested parentID, used during recursive calls for sublayers
  * @param {Array*} incompatibleDNA Used to store incompatible layer names while building DNA
+ * @param {Array*} forcedDNA Used to store forced layer selection combinations names while building DNA
  *  from the top down
  * @returns Array DNA sequence
  */
-function pickRandomElement(layer, dnaSequence, parentId, incompatibleDNA) {
+function pickRandomElement(
+  layer,
+  dnaSequence,
+  parentId,
+  incompatibleDNA,
+  forcedDNA,
+  bypassDNA
+) {
   let totalWeight = 0;
+  // Does this layer include a forcedDNA item? ya? just return it.
+  const forcedPick = layer.elements.find((element) =>
+    forcedDNA.includes(element.name)
+  );
+  if (forcedPick) {
+    debugLogs
+      ? console.log(chalk.yellowBright(`Force picking ${forcedPick.name}/n`))
+      : null;
+    let dnaString = `${parentId}.${forcedPick.id}:${forcedPick.filename}${bypassDNA}`;
+    return dnaSequence.push(dnaString);
+  }
 
   if (incompatibleDNA.includes(layer.name) && layer.sublayer) {
-    incompatibleDNA.push(
-      ...layer.elements.reduce((acc, element) => {
-        return [...acc, element.name];
-      }, [])
-    );
+    debugLogs
+      ? console.log(
+          `Skipping incompatible sublayer directory, ${layer.name}`,
+          layer.name
+        )
+      : null;
     return dnaSequence;
   }
+
   const compatibleLayers = layer.elements.filter(
     (layer) => !incompatibleDNA.includes(layer.name)
   );
   if (compatibleLayers.length === 0) {
+    debugLogs
+      ? console.log(
+          "No compatible layers in the directory, skipping",
+          layer.name
+        )
+      : null;
     return dnaSequence;
   }
   compatibleLayers.forEach((element) => {
     // If there is no weight, it's required, always include it
     // If directory has %, that is % chance to enter the dir
     if (element.weight == "required" && !element.sublayer) {
-      let dnaString = `${parentId}.${element.id}:${element.filename}`;
+      let dnaString = `${parentId}.${element.id}:${element.filename}${bypassDNA}`;
       dnaSequence.unshift(dnaString);
       return;
     }
@@ -425,7 +496,9 @@ function pickRandomElement(layer, dnaSequence, parentId, incompatibleDNA) {
         element,
         dnaSequence,
         `${parentId}.${element.id}`,
-        incompatibleDNA
+        incompatibleDNA,
+        forcedDNA,
+        bypassDNA
       );
     }
     if (element.weight !== "required") {
@@ -446,10 +519,28 @@ function pickRandomElement(layer, dnaSequence, parentId, incompatibleDNA) {
 
     // e.g., directory, or, all files within a directory
     if (random < 0) {
-      // Check for incompatible layer configurations
+      // Check for incompatible layer configurations and only add incompatibilities IF
+      // chosing _this_ layer.
       if (incompatible[currentLayers[i].name]) {
-        console.log("Has incompatible");
+        debugLogs
+          ? console.log(
+              `Adding the following to incompatible list`,
+              ...incompatible[currentLayers[i].name]
+            )
+          : null;
         incompatibleDNA.push(...incompatible[currentLayers[i].name]);
+      }
+      // Similar to incompaticle, check for forced combos
+      if (forcedCombinations[currentLayers[i].name]) {
+        debugLogs
+          ? console.log(
+              chalk.bgYellowBright.black(
+                `\nSetting up the folling forced combinations for ${currentLayers[i].name}: `,
+                ...forcedCombinations[currentLayers[i].name]
+              )
+            )
+          : null;
+        forcedDNA.push(...forcedCombinations[currentLayers[i].name]);
       }
       // if there's a sublayer, we need to concat the sublayers parent ID to the DNA srting
       // and recursively pick nested required and random elements
@@ -459,21 +550,22 @@ function pickRandomElement(layer, dnaSequence, parentId, incompatibleDNA) {
             currentLayers[i],
             dnaSequence,
             `${parentId}.${currentLayers[i].id}`,
-            incompatibleDNA
+            incompatibleDNA,
+            forcedDNA,
+            bypassDNA
           )
         );
       }
+
       // none/empty layer handler
       if (currentLayers[i].name === emptyLayerName) {
         return dnaSequence;
       }
-
-      let dnaString = `${parentId}.${currentLayers[i].id}:${currentLayers[i].filename}`;
+      let dnaString = `${parentId}.${currentLayers[i].id}:${currentLayers[i].filename}${bypassDNA}`;
       return dnaSequence.push(dnaString);
     }
   }
 }
-
 /**
  * given the nesting structure is complicated and messy, the most reliable way to sort
  * is based on the number of nested indecies.
@@ -492,9 +584,18 @@ const sortLayers = (layers) => {
 const createDna = (_layers) => {
   let dnaSequence = [];
   let incompatibleDNA = [];
+  let forcedDNA = [];
+
   _layers.forEach((layer) => {
     const layerSequence = [];
-    pickRandomElement(layer, layerSequence, layer.id, incompatibleDNA);
+    pickRandomElement(
+      layer,
+      layerSequence,
+      layer.id,
+      incompatibleDNA,
+      forcedDNA,
+      layer.bypassDNA ? "?bypassDNA=true" : ""
+    );
     const sortedLayers = sortLayers(layerSequence);
     dnaSequence = [...dnaSequence, [sortedLayers]];
   });
@@ -673,7 +774,7 @@ const startCreating = async () => {
           outputFiles(abstractedIndexes, layerData);
         });
 
-        dnaList.push(newDna);
+        dnaList.push(filterDNAOptions(newDna));
         editionCount++;
         abstractedIndexes.shift();
       } else {
