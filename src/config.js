@@ -16,7 +16,7 @@ const emptyLayerName = "NONE";
 
 const layerConfigurations = [
   {
-    growEditionSizeTo: 11,
+    growEditionSizeTo: 4,
     layersOrder: [
       { name: "Backgrounds", options: { bypassDNA: true } },
       // { name: "Eyeball" },
@@ -30,6 +30,36 @@ const layerConfigurations = [
     ],
   },
 ];
+
+const fillGroups = {
+  skin: [
+    { color: "afafaf", name: "HANDTONE Cool Gray 5 C" },
+    { color: "cacaca", name: "HANDTONE 420 C" },
+    { color: "e7e7e7", name: "HANDTONE 663 C" },
+    { color: "ff959c", name: "HANDTONE 1775 C" },
+    { color: "ff95ce", name: "HANDTONE 237 C" },
+    { color: "ff71fe", name: "HANDTONE Purple C" },
+    { color: "ff82fe", name: "HANDTONE 252 C" },
+    { color: "e295ff", name: "HANDTONE 245 C" },
+    { color: "796cff", name: "HANDTONE 266 C" },
+    { color: "c795ff", name: "HANDTONE 2572 C" },
+    { color: "9f95ff", name: "HANDTONE 2655 C" },
+    { color: "95abff", name: "HANDTONE 7452 C" },
+    { color: "09e0fa", name: "HANDTONE 311 C" },
+    { color: "95d3ff", name: "HANDTONE 297 C" },
+    { color: "95fff4", name: "HANDTONE 3245 C" },
+    { color: "3aff75", name: "HANDTONE 802 C" },
+    { color: "95ffb5", name: "HANDTONE 7479 C" },
+    { color: "b5ff95", name: "HANDTONE 7487 C" },
+    { color: "e0ff95", name: "HANDTONE 374 C" },
+    { color: "f1ef50", name: "HANDTONE 395 C" },
+    { color: "fffe95", name: "HANDTONE 393 C" },
+    { color: "ffd695", name: "HANDTONE 1345 C" },
+    { color: "ffbd95", name: "HANDTONE 1555C" },
+    { color: "ffa671", name: "HANDTONE 1565 C" },
+    { color: "ff843a", name: "HANDTONE 1585 C" },
+  ],
+};
 
 // Incompatible items can be added to this object by a files cleanName
 const incompatible = {
@@ -97,6 +127,7 @@ module.exports = {
   shuffleLayerConfigurations,
   debugLogs,
   extraMetadata,
+  fillGroups,
   incompatible,
   forcedCombinations,
   emptyLayerName,

@@ -26,6 +26,7 @@ const {
   debugLogs,
   incompatible,
   forcedCombinations,
+  fillGroups,
   extraMetadata,
   emptyLayerName,
   outputJPEG,
@@ -295,25 +296,53 @@ const drawElement = (_renderObject, mainCanvas) => {
 let globalColorGroups = {};
 
 const HSLAdjustment = (ctx, img, colorGroup) => {
-  let hue = 360 * Math.random(); // a number in the color wheel
-  let sat = 100 * Math.random();
-  let lightness =
-    Math.random() * (clamp.brightness.max - clamp.brightness.min + 1) +
-    clamp.brightness.min;
-  if (colorGroup) {
-    //get the color group values
+  let hue;
+  let sat;
+  let lightness;
+
+  console.log({ colorGroup, img });
+  if (globalColorGroups[colorGroup]) {
     const groupData = globalColorGroups[colorGroup];
-    if (globalColorGroups[colorGroup]) {
-      hue = groupData.hue;
-      sat = groupData.sat;
-      lightness = groupData.lightness;
-    } else {
-      globalColorGroups[colorGroup] = { hue, sat, lightness };
-    }
+    hue = groupData.hue;
+    sat = groupData.sat;
+    lightness = groupData.lightness;
+  } else if (fillGroups[colorGroup]) {
+    const colorIndex = Math.floor(
+      Math.random() * fillGroups[colorGroup].length
+    );
+    const hex = fillGroups[colorGroup][colorIndex].color;
+    console.log({
+      colorGroup,
+      hex,
+      name: fillGroups[colorGroup][colorIndex].name,
+    });
+    //TODO: maybe handle hex with #'s
+
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+
+    [hue, sat, lightness] = rgbToHsl(r, g, b);
+    console.log({ hue, sat, lightness });
+    globalColorGroups[colorGroup] = { hue, sat, lightness }; //= the one that was picked
+    // add the color to the trait list
+    attributesList.push({
+      trait_type: colorGroup,
+      value: fillGroups[colorGroup][colorIndex].name,
+    });
+  } else {
+    console.log("OOOOOPPPPRRRRRTTTTSSSSSS\n");
+    hue = 360 * Math.random(); // a number in the color wheel
+    sat = 100 * Math.random();
+    lightness =
+      Math.random() * (clamp.brightness.max - clamp.brightness.min + 1) +
+      clamp.brightness.min;
+    // if there is a group with the name in the config fillGroups
+    // use that, otherwise randomize
+
+    globalColorGroups[colorGroup] = { hue, sat, lightness };
   }
-  // hue = 20;
-  // sat = 40;
-  // lightness = 49;
+
   // step 1: draw in original image
   // ctx.globalCompositeOperation = "source-over";
   ctx.drawImage(img, 0, 0, format.width, format.height);
@@ -338,6 +367,36 @@ const HSLAdjustment = (ctx, img, colorGroup) => {
   // step 5: reset comp mode to default
   ctx.globalCompositeOperation = "source-over";
 };
+
+function rgbToHsl(r, g, b) {
+  (r /= 255), (g /= 255), (b /= 255);
+  var max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
+  var h,
+    s,
+    l = (max + min) / 2;
+
+  if (max == min) {
+    h = s = 0; // achromatic
+  } else {
+    var d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      case b:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+
+  return [h * 360, s * 100, l * 100];
+}
 
 /**
  *  Given the randomly generated DNA array,
