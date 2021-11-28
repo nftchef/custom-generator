@@ -47,6 +47,7 @@ const {
 
 const {
   createDna,
+  DNA_DELIMITER,
   isDnaUnique,
   paintLayers,
   layersSetup,
@@ -62,7 +63,8 @@ const canvas = createCanvas(format.width, format.height);
 const ctxMain = canvas.getContext("2d");
 
 const getDNA = () => {
-  return JSON.parse(fs.readFileSync(dnaFilePath));
+  const flat = JSON.parse(fs.readFileSync(dnaFilePath));
+  return flat.map((dnaStrand) => dnaStrand.split(DNA_DELIMITER));
   // .filter((item) => /^[0-9]{1,6}.json/g.test(item));
 };
 
@@ -137,13 +139,15 @@ const regenerateItem = (_id, options) => {
       newDna,
       layerConfigIndex,
       abstractedIndexes: [_id],
+      _background: background,
     };
     // paint layers to global canvas context.. no return value
     paintLayers(ctxMain, renderObjectArray, layerData);
     outputFiles(_id, layerData, options);
     // update the _dna.json
     const existingDna = getDNA();
-    const updatedDnaList = [...existingDna, newDna];
+    const existingDnaFlat = existingDna.map((dna) => dna.join(DNA_DELIMITER));
+    const updatedDnaList = [...existingDnaFlat, newDna];
 
     fs.writeFileSync(
       path.join(dnaFilePath),

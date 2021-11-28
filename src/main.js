@@ -35,7 +35,9 @@ const canvas = createCanvas(format.width, format.height);
 const ctxMain = canvas.getContext("2d");
 var metadataList = [];
 var attributesList = [];
-var dnaList = [];
+
+var dnaList = new Set();
+const DNA_DELIMITER = "*";
 
 const buildSetup = () => {
   if (fs.existsSync(buildDir)) {
@@ -199,9 +201,9 @@ const genColor = () => {
   return pastel;
 };
 
-const drawBackground = () => {
-  ctxMain.fillStyle = genColor();
-  ctxMain.fillRect(0, 0, format.width, format.height);
+const drawBackground = (canvasContext) => {
+  canvasContext.fillStyle = genColor();
+  canvasContext.fillRect(0, 0, format.width, format.height);
 };
 
 const addMetadata = (_dna, _edition, _prefixData) => {
@@ -300,7 +302,6 @@ const HSLAdjustment = (ctx, img, colorGroup) => {
   let sat;
   let lightness;
 
-  console.log({ colorGroup, img });
   if (globalColorGroups[colorGroup]) {
     const groupData = globalColorGroups[colorGroup];
     hue = groupData.hue;
@@ -311,11 +312,11 @@ const HSLAdjustment = (ctx, img, colorGroup) => {
       Math.random() * fillGroups[colorGroup].length
     );
     const hex = fillGroups[colorGroup][colorIndex].color;
-    console.log({
-      colorGroup,
-      hex,
-      name: fillGroups[colorGroup][colorIndex].name,
-    });
+    // console.log({
+    //   colorGroup,
+    //   hex,
+    //   name: fillGroups[colorGroup][colorIndex].name,
+    // });
     //TODO: maybe handle hex with #'s
 
     const r = parseInt(hex.substr(0, 2), 16);
@@ -323,7 +324,7 @@ const HSLAdjustment = (ctx, img, colorGroup) => {
     const b = parseInt(hex.substr(4, 2), 16);
 
     [hue, sat, lightness] = rgbToHsl(r, g, b);
-    console.log({ hue, sat, lightness });
+    // console.log({ hue, sat, lightness });
     globalColorGroups[colorGroup] = { hue, sat, lightness }; //= the one that was picked
     // add the color to the trait list
     attributesList.push({
@@ -331,7 +332,6 @@ const HSLAdjustment = (ctx, img, colorGroup) => {
       value: fillGroups[colorGroup][colorIndex].name,
     });
   } else {
-    console.log("OOOOOPPPPRRRRRTTTTSSSSSS\n");
     hue = 360 * Math.random(); // a number in the color wheel
     sat = 100 * Math.random();
     lightness =
@@ -407,9 +407,10 @@ function rgbToHsl(r, g, b) {
  * @returns Array of selected layer Objects
  */
 const constructLayerToDna = (_dna = [], _layers = []) => {
+  const dna = _dna.split(DNA_DELIMITER);
   let mappedDnaToLayers = _layers.map((layer, index) => {
     let selectedElements = [];
-    const layerImages = _dna.filter(
+    const layerImages = dna.filter(
       (element) => element.split(".")[0] == layer.id
     );
     layerImages.forEach((img) => {
@@ -452,7 +453,7 @@ const constructLayerToDna = (_dna = [], _layers = []) => {
  * @returns new DNA string with any items that should be filtered, removed.
  */
 const filterDNAOptions = (_dna) => {
-  const filteredDNA = _dna.filter((element) => {
+  const filteredDNA = _dna.split(DNA_DELIMITER).filter((element) => {
     const query = /(\?.*$)/;
     const querystring = query.exec(element);
     if (!querystring) {
@@ -466,7 +467,7 @@ const filterDNAOptions = (_dna) => {
     return options.bypassDNA;
   });
 
-  return filteredDNA;
+  return filteredDNA.join(DNA_DELIMITER);
 };
 
 /**
@@ -482,9 +483,8 @@ const removeQueryStrings = (_dna) => {
   return _dna.replace(query, "");
 };
 
-const isDnaUnique = (_DnaList = [], _dna = []) => {
-  let foundDna = _DnaList.find((i) => i.join("") === _dna.join(""));
-  return foundDna == undefined ? true : false;
+const isDnaUnique = (_DnaList, _dna = []) => {
+  return !dnaList.has(_dna);
 };
 
 // expecting to return an array of strings for each _layer_ that is picked,
@@ -658,7 +658,8 @@ const createDna = (_layers) => {
     const sortedLayers = sortLayers(layerSequence);
     dnaSequence = [...dnaSequence, [sortedLayers]];
   });
-  return dnaSequence.flat(2);
+  const dnaStrand = dnaSequence.flat(2).join(DNA_DELIMITER);
+  return dnaStrand;
 };
 
 const writeMetaData = (_data) => {
@@ -707,7 +708,7 @@ const paintLayers = (canvasContext, renderObjectArray, layerData) => {
   debugLogs ? console.log("Clearing canvas") : null;
   canvasContext.clearRect(0, 0, format.width, format.height);
 
-  const { abstractedIndexes } = layerData;
+  const { abstractedIndexes, _background } = layerData;
 
   renderObjectArray.forEach((renderObject) => {
     // one main canvas
@@ -723,9 +724,10 @@ const paintLayers = (canvasContext, renderObjectArray, layerData) => {
       format.height
     );
   });
-  if (background.generate) {
+  console.log("_background.generate", _background.generate);
+  if (_background.generate) {
     canvasContext.globalCompositeOperation = "destination-over";
-    drawBackground();
+    drawBackground(canvasContext);
   }
   globalColorGroups = {};
   debugLogs
@@ -813,7 +815,7 @@ const startCreating = async () => {
       let newDna = createDna(layers);
       if (isDnaUnique(dnaList, newDna)) {
         let results = constructLayerToDna(newDna, layers);
-        console.log("DNA:", newDna);
+        debugLogs ? console.log("DNA:", newDna.split(DNA_DELIMITER)) : null;
         let loadedElements = [];
         // reduce the stacked and nested layer into a single array
         const allImages = results.reduce((images, layer) => {
@@ -828,12 +830,13 @@ const startCreating = async () => {
             newDna,
             layerConfigIndex,
             abstractedIndexes,
+            _background: background,
           };
           paintLayers(ctxMain, renderObjectArray, layerData);
           outputFiles(abstractedIndexes, layerData);
         });
 
-        dnaList.push(filterDNAOptions(newDna));
+        dnaList.add(filterDNAOptions(newDna));
         editionCount++;
         abstractedIndexes.shift();
       } else {
@@ -850,11 +853,12 @@ const startCreating = async () => {
     layerConfigIndex++;
   }
   writeMetaData(JSON.stringify(metadataList, null, 2));
-  writeDnaLog(JSON.stringify(dnaList, null, 2));
+  writeDnaLog(JSON.stringify([...dnaList], null, 2));
 };
 
 module.exports = {
   startCreating,
+  DNA_DELIMITER,
   createDna,
   constructLayerToDna,
   isDnaUnique,
